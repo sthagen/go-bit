@@ -98,3 +98,29 @@ man page parsing + flag suggestions for all commands
 git log --pretty=format:"* [%s](https://github.com/chriswalz/bit/commit/%H)" 09facd30..HEAD
 
 deleting tags from local and origin is painful
+
+COMP_POINT=25 COMP_LINE="bit status" bitcomplete
+
+apt-get install language-pack-es
+locale -e
+LC_ALL=es_MX.utf8 git status
+
+
+https://github.com/chriswalz/bit/releases/download/v0.6.5/bit_0.6.5_Darwin_x86_64.tar.gz
+
+https://github.com/chriswalz/bit/releases/v0.6.5/bit_0.6.5_Darwin_x86_64.tar.gz
+
+bit release should have prepush and post push scripts
+
+git-extras sync?
+
+bit fix undo-commit
+bit fix untrack-file
+bit fix rename-commit
+bit fix catch-up-to-branch
+
+delete tag local and on origin
+
+bit save -e 
+
+combine bit & bitcomplete into one binary?

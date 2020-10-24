@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/c-bata/go-prompt"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/thoas/go-funk"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync"
 )
 
 func RunInTerminalWithColor(cmdName string, args []string) error {
@@ -22,6 +25,8 @@ func RunInTerminalWithColor(cmdName string, args []string) error {
 }
 
 func RunInTerminalWithColorInDir(cmdName string, dir string, args []string) error {
+	log.Debug().Msg(cmdName + " " + strings.Join(args, " "))
+
 	_, w, err := os.Pipe()
 	if err != nil {
 		panic(err)
@@ -37,69 +42,8 @@ func RunInTerminalWithColorInDir(cmdName string, dir string, args []string) erro
 	}
 
 	err = cmd.Run()
+	log.Debug().Err(err)
 	return err
-}
-
-func CloudBranchExists() bool {
-	msg, err := exec.Command("git", "pull").CombinedOutput()
-	if err != nil {
-		fmt.Println(err)
-	}
-	//log.Println("msg:", string(msg))
-	//log.Println("err:", err)
-	return !strings.Contains(string(msg), "There is no tracking information for the current branch")
-}
-
-func CurrentBranch() string {
-	msg, err := exec.Command("git", "branch", "--show-current").CombinedOutput()
-	if err != nil {
-		fmt.Println(err)
-	}
-	return strings.TrimSpace(string(msg))
-}
-
-func IsYes(resp string) bool {
-	return resp == "YES" || resp == "Y" || resp == "yes" || resp == "y"
-}
-
-func IsAheadOfCurrent() bool {
-	msg, err := exec.Command("git", "status", "-sb").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Contains(string(msg), "ahead")
-}
-
-func IsGitRepo() bool {
-	_, err := exec.Command("git", "status").CombinedOutput()
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-func IsBehindCurrent() bool {
-	msg, err := exec.Command("git", "status", "-sb").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Contains(string(msg), "behind")
-}
-
-func NothingToCommit() bool {
-	msg, err := exec.Command("git", "status").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Contains(string(msg), "nothing to commit")
-}
-
-func IsDiverged() bool {
-	msg, err := exec.Command("git", "status").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Contains(string(msg), "have diverged")
 }
 
 func AskConfirm(q string) bool {
@@ -110,7 +54,7 @@ func AskConfirm(q string) bool {
 	return ans
 }
 
-func AskMultLine(q string) string {
+func AskMultiLine(q string) string {
 	text := ""
 	prompt := &survey.Multiline{
 		Message: q,
@@ -119,60 +63,10 @@ func AskMultLine(q string) string {
 	return text
 }
 
-func StashableChanges() bool {
-	msg, err := exec.Command("git", "status").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Contains(string(msg), "Changes to be committed:") || strings.Contains(string(msg), "Changes not staged for commit:")
-}
-
-func MostRecentCommonAncestorCommit(branchA, branchB string) string {
-	msg, err := exec.Command("git", "merge-base", branchA, branchB).CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return string(msg)
-}
-
-func StashList() []string {
-	msg, err := exec.Command("git", "stash", "list").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return strings.Split(string(msg), "\n")
-}
-
-func refreshBranch() error {
-	msg, err := exec.Command("git", "pull", "--ff-only").CombinedOutput()
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(string(msg)) == "Already up to date." {
-		return nil
-	}
-	fmt.Println("Branch was fast-forwarded")
-	return nil
-}
-
-func refreshOnBranch(branchName string) error {
-	_, err := exec.Command("git", "pull", "--ff-only", branchName).CombinedOutput()
-	if err != nil {
-		return err
-	}
-	fmt.Println("Branch was fast-forwarded")
-	return nil
-}
-
-func branchListRaw() (string, error) {
-	msg, err := exec.Command("git", "for-each-ref", "--sort=-committerdate", "refs/heads/", "refs/remotes", "--format='%(authordate:short); %(authorname); %(color:red)%(objectname:short); %(color:yellow)%(refname:short)%(color:reset); (%(color:green)%(committerdate:relative)%(color:reset))'").CombinedOutput()
-	return string(msg), err
-}
-
 func BranchList() []Branch {
 	rawBranchData, err := branchListRaw()
 	if err != nil {
-		//log.Println(err) // fixme use debug log
+		log.Debug().Err(err)
 	}
 	return toStructuredBranchList(rawBranchData)
 }
@@ -188,11 +82,12 @@ func toStructuredBranchList(rawBranchData string) []Branch {
 			continue
 		}
 
-		cols := strings.Split(line, "; ")
+		cols := strings.Split(line[1:], "; ")
 		b := Branch{
 			Author:       cols[1],
 			Name:         cols[3],
-			RelativeDate: line[strings.Index(line, "("):],
+			RelativeDate: cols[4],
+			AbsoluteDate: cols[0],
 		}
 		if b.Name == "origin/master" || b.Name == "origin/HEAD" {
 			continue
@@ -205,7 +100,7 @@ func toStructuredBranchList(rawBranchData string) []Branch {
 func GenBumpedSemVersion() string {
 	msg, err := exec.Command("/bin/sh", "-c", `git describe --tags --abbrev=0 | awk -F. '{$NF+=1; OFS="."; print $0}'`).CombinedOutput()
 	if err != nil {
-		fmt.Println(err)
+		log.Debug().Err(err)
 	}
 	out := string(msg)
 	return strings.TrimSpace(out)
@@ -215,9 +110,9 @@ func AddCommandToShellHistory(cmd string, args []string) {
 	// not possible??
 	msg, err := exec.Command("/bin/bash", "-c", "history").CombinedOutput()
 	if err != nil {
-		fmt.Println(err)
+		log.Debug().Err(err)
 	}
-	fmt.Println(msg)
+	log.Debug().Msg(string(msg))
 }
 
 func BranchListSuggestions() []prompt.Suggest {
@@ -226,38 +121,10 @@ func BranchListSuggestions() []prompt.Suggest {
 	for _, branch := range branches {
 		suggestions = append(suggestions, prompt.Suggest{
 			Text:        branch.Name,
-			Description: branch.RelativeDate + " " + branch.Author,
+			Description: fmt.Sprintf("%s  %s  %s", branch.Author, branch.RelativeDate, branch.AbsoluteDate),
 		})
 	}
 	return suggestions
-}
-
-func FileChangesList() []FileChange {
-	msg, err := exec.Command("git", "status", "--porcelain=v2").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	list := strings.Split(string(msg), "\n")
-	statusMap := map[string]string{
-		"M.": "Added",
-		"MM": "Partially Added",
-		"A.": "New File",
-		".M": "Not Staged",
-		"?":  "Untracked",
-	}
-	var changes []FileChange
-	for i := 0; i < len(list)-1; i++ {
-		cols := strings.Fields(strings.TrimSpace(list[i]))
-		b := FileChange{
-			Name:   cols[len(cols)-1],
-			Status: statusMap[cols[1]],
-		}
-		if len(cols) == 2 {
-			b.Status = statusMap[cols[0]]
-		}
-		changes = append(changes, b)
-	}
-	return changes
 }
 
 func GitAddSuggestions() []prompt.Suggest {
@@ -290,6 +157,18 @@ func GitResetSuggestions() []prompt.Suggest {
 	return suggestions
 }
 
+func GitHubPRSuggestions() []prompt.Suggest {
+	log.Debug().Msg("Github suggestions retrieving")
+	prs := ListGHPullRequests()
+	suggestions := funk.Map(prs, func(pr *PullRequest) prompt.Suggest {
+		return prompt.Suggest{
+			Text:        fmt.Sprintf("%s:%s-#%d", pr.State, pr.AuthorBranch, pr.Number),
+			Description: fmt.Sprintf("%s", pr.Title),
+		}
+	})
+	return suggestions.([]prompt.Suggest)
+}
+
 func CobraCommandToSuggestions(cmds []*cobra.Command) []prompt.Suggest {
 	var suggestions []prompt.Suggest
 	for _, branch := range cmds {
@@ -305,6 +184,7 @@ type Branch struct {
 	Author       string
 	Name         string
 	RelativeDate string
+	AbsoluteDate string
 }
 
 type FileChange struct {
@@ -327,10 +207,18 @@ func SuggestionPrompt(prefix string, completer func(d prompt.Document) []prompt.
 		prompt.OptionDescriptionTextColor(prompt.White),
 		prompt.OptionShowCompletionAtStart(),
 		prompt.OptionCompletionOnDown(),
-		prompt.OptionSwitchKeyBindMode(prompt.CommonKeyBind),
+		prompt.OptionSwitchKeyBindMode(prompt.EmacsKeyBind),
 		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlC,
 			Fn:  exit,
+		}),
+		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
+			ASCIICode: []byte{0x1b, 0x62},
+			Fn:        prompt.GoLeftWord,
+		}),
+		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
+			ASCIICode: []byte{0x1b, 0x66},
+			Fn:        prompt.GoRightWord,
 		}),
 	)
 	branchName := strings.TrimSpace(result)
@@ -355,33 +243,11 @@ func HandleExit() {
 	default:
 		fmt.Println(v)
 		fmt.Println(string(debug.Stack()))
-	}
-}
+		fmt.Println("OS:", runtime.GOOS, runtime.GOARCH)
+		fmt.Println("bit version " + GetVersion())
+		PrintGitVersion()
 
-func AllGitAliases() (cc []*cobra.Command) {
-	msg, err := exec.Command("git", "config", "--get-regexp", "^alias").CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-		return cc
 	}
-	aliases := strings.Split(strings.TrimSpace(string(msg)), "\n")
-	for _, alias := range aliases {
-		if alias == "" {
-			continue
-		}
-
-		split := strings.Fields(strings.TrimSpace(alias)[6:])
-		if len(split) < 2 {
-			continue
-		}
-		c := cobra.Command{
-			Use:   split[0],
-			Short: strings.Join(split[1:], " "),
-		}
-		cc = append(cc, &c)
-	}
-
-	return cc
 }
 
 func AllBitSubCommands(rootCmd *cobra.Command) ([]*cobra.Command, map[string]*cobra.Command) {
@@ -417,19 +283,6 @@ func concatCopyPreAllocate(slices [][]*cobra.Command) []*cobra.Command {
 func FlagSuggestionsForCommand(gitSubCmd string, flagtype string) []prompt.Suggest {
 	str := ""
 
-	// git help pull | col -b > man.txt
-	//if gitSubCmd != "commit" && gitSubCmd != "push" && gitSubCmd != "status" {
-	//	msg, err := exec.Command("/bin/sh", "-c", "git help " + gitSubCmd + " | col -bx").CombinedOutput()
-	//	if err != nil {
-	//		//fmt.Println(err)
-	//	}
-	//	out := string(msg)
-	//	//out = stripCtlAndExtFromUTF8(out)
-	//	split := strings.Split(out, "OPTIONS")
-	//	fmt.Println(out, split)
-	//	out=split[1]
-	//	//return []prompt.Suggest{}
-	//}
 	flagMap := map[string]string{
 		"add":      addFlagsStr,
 		"diff":     diffFlagsStr,
@@ -477,14 +330,16 @@ func FlagSuggestionsForCommand(gitSubCmd string, flagtype string) []prompt.Sugge
 				})
 			}
 		}
-
-		//log.Println(list[i])
 	}
 	return suggestions
 }
 
 func CommonCommandsList() []*cobra.Command {
 	return []*cobra.Command{
+		{
+			Use:   "status",
+			Short: "Show the working tree status",
+		},
 		{
 			Use:   "pull --rebase origin master",
 			Short: "Rebase on origin master branch",
@@ -521,6 +376,10 @@ func CommonCommandsList() []*cobra.Command {
 			Use:   "log --oneline",
 			Short: "Display one commit per line",
 		},
+		{
+			Use:   "diff --cached",
+			Short: "Shows all staged changes",
+		},
 	}
 }
 
@@ -528,14 +387,14 @@ func RunScriptWithString(path string, script string, args ...string) {
 	var err error
 	err = RunInTerminalWithColor("bin/sh", args)
 	if err != nil {
-		fmt.Println(err)
+		log.Debug().Err(err)
 	}
 }
 
 func parseManPage(subCmd string) string {
 	msg, err := exec.Command("/bin/bash", "-c", "git help "+subCmd+" | col -b").CombinedOutput()
 	if err != nil {
-		fmt.Println(err)
+		log.Debug().Err(err)
 	}
 	splitA := strings.Split(string(msg), "\n\nOPTIONS")
 	splitB := regexp.MustCompile(`\.\n\n[A-Z]+`).Split(splitA[1], 2)
@@ -546,26 +405,122 @@ func parseManPage(subCmd string) string {
 	return rawFlagSection
 }
 
-func checkoutBranch(branch string) bool {
-	msg, err := exec.Command("git", "checkout", branch).CombinedOutput()
-	if err != nil {
-		//fmt.Println(err)
-	}
-	return !strings.Contains(string(msg), "did not match any file")
-}
-
-func tagCurrentBranch(version string) error {
-	msg, err := exec.Command("git", "tag", version).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%v: %w", string(msg), err)
-	}
-	return err
-}
-
 func fileExists(filename string) bool {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func isBranchCompletionCommand(command string) bool {
+	return command == "checkout" || command == "switch" || command == "co" || command == "pr" || command == "merge"
+}
+
+func isBranchChangeCommand(command string) bool {
+	return command == "checkout" || command == "switch" || command == "co" || command == "pr"
+}
+
+func Find(slice []string, val string) int {
+	for i, item := range slice {
+		if item == val {
+			return i
+		}
+	}
+	return -1
+}
+
+func parseCommandLine(command string) ([]string, error) {
+	var args []string
+	state := "start"
+	current := ""
+	quote := "\""
+	escapeNext := true
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+
+		if state == "quotes" {
+			if string(c) != quote {
+				current += string(c)
+			} else {
+				args = append(args, current)
+				current = ""
+				state = "start"
+			}
+			continue
+		}
+
+		if escapeNext {
+			current += string(c)
+			escapeNext = false
+			continue
+		}
+
+		if c == '\\' {
+			escapeNext = true
+			continue
+		}
+
+		if c == '"' || c == '\'' {
+			state = "quotes"
+			quote = string(c)
+			continue
+		}
+
+		if state == "arg" {
+			if c == ' ' || c == '\t' {
+				args = append(args, current)
+				current = ""
+				state = "start"
+			} else {
+				current += string(c)
+			}
+			continue
+		}
+
+		if c != ' ' && c != '\t' {
+			state = "arg"
+			current += string(c)
+		}
+	}
+
+	if state == "quotes" {
+		return []string{}, fmt.Errorf("Unclosed quote in command line: %s", command)
+	}
+
+	if current != "" {
+		args = append(args, current)
+	}
+
+	return args, nil
+}
+
+func memoize(suggestions []prompt.Suggest) func() []prompt.Suggest {
+	return func () []prompt.Suggest {
+		return suggestions
+	}
+}
+
+func lazyLoad(suggestionFunc func() []prompt.Suggest) func() []prompt.Suggest {
+	var suggestions []prompt.Suggest
+	return func () []prompt.Suggest {
+		if suggestions == nil {
+			suggestions = suggestionFunc()
+		}
+		return suggestions
+	}
+}
+
+func asyncLoad(suggestionFunc func() []prompt.Suggest) func() []prompt.Suggest {
+	var suggestions []prompt.Suggest
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		suggestions = suggestionFunc()
+	}()
+	return func () []prompt.Suggest {
+		wg.Wait()
+		return suggestions
+	}
 }

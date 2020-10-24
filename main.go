@@ -1,5 +1,5 @@
 /*
-Copyright © 2020 NAME HERE <EMAIL ADDRESS>
+Copyright © 2020 Chris Walz <walz@reconbuddy.com>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,32 +18,60 @@ package main
 import (
 	"fmt"
 	bitcmd "github.com/chriswalz/bit/cmd"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"os"
 )
 
-func find(slice []string, val string) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
-	}
-	return false
-}
+// this should be overwritten at compile time
+var version string = "v0.8.0"
 
 func main() {
 	// defer needed to handle funkyness with CTRL + C & go-prompt
 	defer bitcmd.HandleExit()
-	if !bitcmd.IsGitRepo() {
-		fmt.Println("fatal: not a git repository (or any of the parent directories): .git")
-		return
-	}
+	bitcmd.ShellCmd.Version = version
+
+
+	// set debug level
+	log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	argsWithoutProg := os.Args[1:]
-	bitcliCmds := []string{"save", "sync", "version", "help", "info", "release"}
-	if len(argsWithoutProg) == 0 || find(bitcliCmds, argsWithoutProg[0]) {
+
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	debugIndex := bitcmd.Find(argsWithoutProg, "--debug")
+	if debugIndex != -1 {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		argsWithoutProg = append(argsWithoutProg[:debugIndex], argsWithoutProg[debugIndex+1:]...)
+	}
+
+	// verify is git repo
+	if len(os.Args) >= 2 {
+		if os.Args[1] == "--version" {
+			fmt.Println("bit version " + version)
+			bitcmd.PrintGitVersion()
+			return
+		}
+	} else {
+
+	}
+	if !bitcmd.IsGitRepo() {
+		if len(os.Args) >= 2 && os.Args[1] == "update" {
+			// do nothing here, proceed to update path
+		} else if len(os.Args) == 2 && os.Args[1] == "--version" {
+			fmt.Println("bit version " + version)
+			bitcmd.PrintGitVersion()
+			return
+		} else {
+			fmt.Println("fatal: not a git repository (or any of the parent directories): .git")
+			return
+		}
+	}
+
+	bitcliCmds := []string{"save", "sync", "help", "info", "release", "update", "pr"}
+	if len(argsWithoutProg) == 0 || bitcmd.Find(bitcliCmds, argsWithoutProg[0]) != -1 {
 		bitcli()
 	} else {
 		completerSuggestionMap, _ := bitcmd.CreateSuggestionMap(bitcmd.ShellCmd)
-		yes := bitcmd.GitCommandsPromptUsed(argsWithoutProg, completerSuggestionMap)
+		yes := bitcmd.GitCommandsPromptUsed(argsWithoutProg, completerSuggestionMap, version)
 		if yes {
 			return
 		}

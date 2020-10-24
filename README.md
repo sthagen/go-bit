@@ -1,13 +1,15 @@
+![Twitter Follow](https://img.shields.io/twitter/follow/chriswalz___?style=social)
+
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Bit%20-%20a%20modern%20git%20cli%20&url=https://github.com/chriswalz/bit&hashtags=bit,git,cli,developers)
 <p align="center">
 <img
     src="https://user-images.githubusercontent.com/6971318/95147815-cd1d6a80-074f-11eb-8265-56466ac628f8.gif"
     width="600px" border="0" alt="bit">
 <br>
+<img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/chriswalz/bit?color=gree">
 <a href="https://goreportcard.com/report/github.com/chriswalz/bit"><img src="https://goreportcard.com/badge/github.com/chriswalz/bit" alt="Version"></a>
 <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/chriswalz/bit" alt="Version"></a>
 <a href="#"><img src="https://img.shields.io/github/stars/chriswalz/bit?style=social" alt="Version"></a>
-<a href="https://github.com/chriswalz/bit/tags"><img src="https://img.shields.io/github/v/tag/chriswalz/bit?sort=semver" alt="Version"></a>
 </p>
 
 
@@ -21,15 +23,39 @@
 - new commands like `bit sync` that vastly simplify your workflow 
 - commands from **git-extras** such as `bit release` & `bit info`
 - **fully compatible with git** allowing you to fallback to git if need be.  
+- get insight into how bit works using `bit --debug`
 
-## Install
+--- **New** ---
 
-### using `cURL` (Simplest way to install) 
+- [X] `bit pr` view and checkout pull requests from Github (Requires GitHub CLI) 
+- [X] easily update bit using `bit update`
+
+
+--- **Coming Soon** ---
+- checkout pull requests from github
+- improved `bit sync`
+- more completions!
+
+## Install / Update
+
+**new versions** of bit can now update using `bit update`
+
+### using `cURL` (Simplest way to install)
+
+Like bit? [Sponsor](https://github.com/sponsors/chriswalz) bit for as little as $5 
 
 ```shell script
-curl -sf https://gobinaries.com/chriswalz/bit | sh;
-curl -sf https://gobinaries.com/chriswalz/bit/bitcomplete | sh && echo y | COMP_INSTALL=1 bitcomplete
+curl -sf https://gobinaries.com/chriswalz/bit | sh; curl -sf https://gobinaries.com/chriswalz/bit/bitcomplete | sh && echo y | COMP_INSTALL=1 bitcomplete;
+echo "Type bit then press <ENTER> to show interactive prompt"
+bit;
 ```
+
+To overwrite installation location
+
+`export PREFIX=/opt/bit/git && mkdir -p ${PREFIX}  ## optional: override default install location /usr/local/bin`
+
+
+`bit`, `bit checkout` & `bit switch` will show interactive prompts after you press ENTER
 
 ### using `go` (Harder way to install)
 *Caveats: GOPATH and GOBIN need to be set. Verify with `go env`. If they are not set, add this to your .bashrc or .bash_profile etc. AND open new terminal*
@@ -90,7 +116,7 @@ Synchronize your changes to origin branch (Beta)
 
 `bit sync`
 
-You have access to ALL git commands as well. 90% of the time the above commands will have you covered. 
+You have access to ALL git commands as well.  
 
 `bit commit -m "I can still use git commands"`, `bit pull -r origin master`
 
@@ -104,7 +130,9 @@ Switched to a new branch 'example-branch'
 
 [Makes some changes]
 
-`bit save "add important feature"`
+`bit save "add important feature"` 
+
+*for multiline commits simply don't put the final quote until you're done typing*
 
 [fix an error for important feature]
 
@@ -117,7 +145,6 @@ Switched to a new branch 'example-branch'
 [two days later confirm your branch is in sync with origin]
 
 `bit sync`
-
 
 
 
@@ -169,19 +196,36 @@ Switched to a new branch 'example-branch'
 Thanks to [Gitless](https://gitless.com/), [git-extras](https://github.com/tj/git-extras), researchers in the field and of course the developers of `git` itself! Also, thanks to [go-prompt](https://github.com/c-bata/go-prompt) for the interactive prompt library
 
 ## News 
+- https://news.ycombinator.com/item?id=24751212
 - https://www.tldrnewsletter.com/archives/20201007
 - https://www.reddit.com/r/golang/comments/j5wggn/bit_an_experimental_git_cli_with_a_powerful/
 - https://b.hatena.ne.jp/entry/s/github.com/chriswalz/bit
 - https://news.hada.io/topic?id=2990
+- https://twitter.com/newsycombinator/status/1315517850954727424
+- https://forum.devtalk.com/t/bit-a-modernized-git-cli-written-in-go/3065
+- https://gocn.vip/topics/11063
+- https://golangweekly.com/issues/333
+- https://archive.faabli.com/archive/2020-10-09 
 
 ## Changelog 
+v0.6
+- [X] fix: improved git compatibility for older versions of git 
+- [X] feature: emacs key binds 
+- [X] feature: relative and absolute branch times
+- [X] feature: completions for rebase & log
+- [X] enhancement: smarter suggestions
+- [X] fix: show proper descriptions for some flags
+- [X] fix: prevent panic on classical tab completion for some users
+
 v0.5
 
 - [X] `bit switch`, `bit co`, `bit checkout` will show prompt 
 - [X] fix bit tab completion (bitcomplete)
 - [X] fix edge case where there is an invalid ref
 - [X] various minor fixes
-- [X] Deployment: automatic versioning 
+- [X] more completions
+- [X] better suggestion filtering
+- [X] absolute and relative times for branch suggestions
 
 v0.4
 
