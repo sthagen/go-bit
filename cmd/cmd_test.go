@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/c-bata/go-prompt"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func toString(list []*cobra.Command) []string {
@@ -24,10 +25,10 @@ func suggestionToString(list []prompt.Suggest) []string {
 	return newList
 }
 
-func branchToString(list []Branch) []string {
+func branchToString(list []*Branch) []string {
 	newList := make([]string, len(list))
 	for i, v := range list {
-		newList[i] = v.Name
+		newList[i] = v.FullName
 	}
 	return newList
 }
@@ -41,8 +42,8 @@ func TestCommonCommandsList(t *testing.T) {
 }
 
 func TestBranchList(t *testing.T) {
-	expects := []string{"master"}
-	notexpects := []string{"origin/master", "origin/HEAD"}
+	expects := []string{"master", "fix-sync-upstream"}
+	notexpects := []string{"origin/master", "origin/HEAD", "origin/fix-sync-upstream"}
 	reality := branchToString(BranchList())
 	for _, e := range expects {
 		assert.Contains(t, reality, e)
@@ -84,7 +85,7 @@ func TestToStructuredBranchList(t *testing.T) {
 		list := toStructuredBranchList(e.raw)
 		assert.Greaterf(t, len(list), 0, e.expectedFirstBranchName)
 		reality := list[0]
-		assert.Equal(t, reality.Name, e.expectedFirstBranchName)
+		assert.Equal(t, reality.FullName, e.expectedFirstBranchName)
 		assert.Equal(t, reality.Author, e.expectedAuthor)
 		assert.Contains(t, reality.RelativeDate, e.expectedRelativeDate)
 		assert.Equal(t, reality.AbsoluteDate, e.expectedAbsoluteDate)
@@ -151,7 +152,7 @@ func TestListGHPullRequests(t *testing.T) {
 	prs := ListGHPullRequests()
 	assert.Contains(t, prs[1].Title, expect.Title)
 	assert.Equal(t, prs[1].Number, expect.Number)
-	//assert.Contains(t, prs[1].State, expect.State)
+	// assert.Contains(t, prs[1].State, expect.State)
 }
 
 func BenchmarkAllBitAndGitSubCommands(b *testing.B) {

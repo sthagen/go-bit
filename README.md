@@ -3,7 +3,7 @@
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Bit%20-%20a%20modern%20git%20cli%20&url=https://github.com/chriswalz/bit&hashtags=bit,git,cli,developers)
 <p align="center">
 <img
-    src="https://user-images.githubusercontent.com/6971318/95147815-cd1d6a80-074f-11eb-8265-56466ac628f8.gif"
+    src="https://user-images.githubusercontent.com/6971318/97790948-af52f200-1ba3-11eb-8b9e-a614e44da12c.gif"
     width="600px" border="0" alt="bit">
 <br>
 <img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/chriswalz/bit?color=gree">
@@ -23,16 +23,16 @@
 - new commands like `bit sync` that vastly simplify your workflow 
 - commands from **git-extras** such as `bit release` & `bit info`
 - **fully compatible with git** allowing you to fallback to git if need be.  
-- get insight into how bit works using `bit --debug`
+- get insight into how bit works using `bit --debug`.
 
 --- **New** ---
 
 - [X] `bit pr` view and checkout pull requests from Github (Requires GitHub CLI) 
 - [X] easily update bit using `bit update`
+- [X] single binary (no more bitcomplete) add classical tab completion with `bit complete`
 
 
 --- **Coming Soon** ---
-- checkout pull requests from github
 - improved `bit sync`
 - more completions!
 
@@ -45,7 +45,8 @@
 Like bit? [Sponsor](https://github.com/sponsors/chriswalz) bit for as little as $5 
 
 ```shell script
-curl -sf https://gobinaries.com/chriswalz/bit | sh; curl -sf https://gobinaries.com/chriswalz/bit/bitcomplete | sh && echo y | COMP_INSTALL=1 bitcomplete;
+curl -sf https://gobinaries.com/chriswalz/bit | sh;
+bit complete;
 echo "Type bit then press <ENTER> to show interactive prompt"
 bit;
 ```
@@ -66,9 +67,18 @@ export GOBIN=$(go env GOPATH)/bin
 
 ```shell script
 GO111MODULE=on go get github.com/chriswalz/bit@latest;
-GO111MODULE=on go get github.com/chriswalz/bit/bitcomplete@latest;
-COMP_INSTALL=1 bitcomplete;
+bit complete
 ```
+
+### using `Homebrew` (For MacOS users)
+
+```shell script
+brew install bit-git
+bit complete
+bit
+```
+
+Not working? Try `brew doctor`
 
 #### using `go` (For Windows Users) 
 ```shell script
@@ -102,19 +112,28 @@ Platform Support:
 - WSL/Windows Subsystem for Linux (Windows)
 - gnome-terminal (Ubuntu)
 
+Customization: 
+- `BIT_THEME=inverted`
+- `BIT_THEME=monochrome`
+
 ## Bit specific command Usage 
 
-Create a new commit
+Create a new commit *(roughly equivalent to `git commit -am "commit message"`)*
 
 `bit save [commit message]`
 
 Save your changes to the current branch [amends current commit when ahead of origin]
+*(roughly equivalent to `git commit -a` or conditionally `git commit -a --amend --no-edit`)*
 
 `bit save` 
 
 Synchronize your changes to origin branch (Beta)
+*(roughly equivalent to `git pull -r; git push`)*
 
 `bit sync`
+
+*(roughly equivalent to `git pull -r; git push; git pull -r origin master; git push`)*
+`bit sync origin master`
 
 You have access to ALL git commands as well.  
 
@@ -142,11 +161,13 @@ Switched to a new branch 'example-branch'
 
 `bit sync`
 
-[two days later confirm your branch is in sync with origin]
+[two days later confirm your branch is in sync with origin branch]
 
 `bit sync`
 
+[rebase your changes from origin master]
 
+`bit sync origin master`
 
 ## Features
 
@@ -206,8 +227,25 @@ Thanks to [Gitless](https://gitless.com/), [git-extras](https://github.com/tj/gi
 - https://gocn.vip/topics/11063
 - https://golangweekly.com/issues/333
 - https://archive.faabli.com/archive/2020-10-09 
+- https://www.wykop.pl/wpis/52945683/unknownews-wolanie-nie-dziala-zapisz-sie-lepiej-na/
+- https://blog.csdn.net/a419240016/article/details/109178001
 
-## Changelog 
+## Changelog
+v0.9
+- [X] enhancement: improve bit sync behavior including `bit sync <upstream> <branch>`
+- [X] enhancement: bit sync provides a rebase option for diverged branches`
+- [X] fix: enable compatibility with non-english languages 
+
+v0.8
+- [X] feature: checkout Pull Requests from github (requires `gh pr list` to work)
+- [X] enhancement: install with homebrew: `brew install bit-git`
+- [X] enhancement: Color themes `BIT_THEME=inverted` or `BIT_THEME=monochrome` light terminal backgrounds
+- [X] fix: bit clone outside a git repo
+- [X] enhancement: bit is now a single binary
+
+v0.7
+- [X] feature: update your cli with `bit update`
+
 v0.6
 - [X] fix: improved git compatibility for older versions of git 
 - [X] feature: emacs key binds 

@@ -27,10 +27,11 @@ import (
 var version string = "v0.8.0"
 
 func main() {
+	bitcmd.Bitcomplete()
+
 	// defer needed to handle funkyness with CTRL + C & go-prompt
 	defer bitcmd.HandleExit()
 	bitcmd.ShellCmd.Version = version
-
 
 	// set debug level
 	log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -45,33 +46,27 @@ func main() {
 
 	// verify is git repo
 	if len(os.Args) >= 2 {
-		if os.Args[1] == "--version" {
+		if os.Args[1] == "--version" || os.Args[1] == "version" {
 			fmt.Println("bit version " + version)
 			bitcmd.PrintGitVersion()
 			return
 		}
-	} else {
-
 	}
 	if !bitcmd.IsGitRepo() {
-		if len(os.Args) >= 2 && os.Args[1] == "update" {
+		if len(os.Args) >= 2 && (os.Args[1] == "update" || os.Args[1] == "clone" || os.Args[1] == "complete" || os.Args[1] == "init" || os.Args[1] == "send-email" || os.Args[1] == "svn" || os.Args[1] == "config" || os.Args[1] == "bugreport") {
 			// do nothing here, proceed to update path
-		} else if len(os.Args) == 2 && os.Args[1] == "--version" {
-			fmt.Println("bit version " + version)
-			bitcmd.PrintGitVersion()
-			return
 		} else {
 			fmt.Println("fatal: not a git repository (or any of the parent directories): .git")
 			return
 		}
 	}
 
-	bitcliCmds := []string{"save", "sync", "help", "info", "release", "update", "pr"}
+	bitcliCmds := []string{"save", "sync", "help", "info", "release", "update", "pr", "complete"}
 	if len(argsWithoutProg) == 0 || bitcmd.Find(bitcliCmds, argsWithoutProg[0]) != -1 {
 		bitcli()
 	} else {
 		completerSuggestionMap, _ := bitcmd.CreateSuggestionMap(bitcmd.ShellCmd)
-		yes := bitcmd.GitCommandsPromptUsed(argsWithoutProg, completerSuggestionMap, version)
+		yes := bitcmd.HijackGitCommandOccurred(argsWithoutProg, completerSuggestionMap, version)
 		if yes {
 			return
 		}

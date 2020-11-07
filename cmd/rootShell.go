@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/spf13/cobra"
@@ -33,7 +34,7 @@ var ShellCmd = &cobra.Command{
 			return
 		}
 		if bitCmdMap[subCommand] == nil {
-			yes := GitCommandsPromptUsed(parsedArgs, completerSuggestionMap, cmd.Version)
+			yes := HijackGitCommandOccurred(parsedArgs, completerSuggestionMap, cmd.Version)
 			if yes {
 				return
 			}
@@ -57,7 +58,7 @@ func CreateSuggestionMap(cmd *cobra.Command) (map[string]func() []prompt.Suggest
 	start = time.Now()
 	allBitCmds := AllBitAndGitSubCommands(cmd)
 	log.Debug().Msg((time.Now().Sub(start)).String())
-	//commonCommands := CobraCommandToSuggestions(CommonCommandsList())
+	// commonCommands := CobraCommandToSuggestions(CommonCommandsList())
 	start = time.Now()
 	branchListSuggestions := BranchListSuggestions()
 	log.Debug().Msg((time.Now().Sub(start)).String())
@@ -87,11 +88,10 @@ func CreateSuggestionMap(cmd *cobra.Command) (map[string]func() []prompt.Suggest
 			{Text: "<version>", Description: "Name of release version e.g. v0.1.2"},
 		}),
 		"reset": memoize(gitResetSuggestions),
-		"pr": lazyLoad(GitHubPRSuggestions),
+		"pr":    lazyLoad(GitHubPRSuggestions),
 		//"_any": commonCommands,
 	}
 	return completerSuggestionMap, bitCmdMap
-
 }
 
 // Execute adds all child commands to the shell command and sets flags appropriately.
@@ -158,15 +158,16 @@ func RunGitCommandWithArgs(args []string) {
 	return
 }
 
-func GitCommandsPromptUsed(args []string, suggestionMap map[string]func() []prompt.Suggest, version string) bool {
+func HijackGitCommandOccurred(args []string, suggestionMap map[string]func() []prompt.Suggest, version string) bool {
 	sub := args[0]
 	// handle checkout,switch,co commands as checkout
 	// if "-b" flag is not provided and branch does not exist
 	// user would be prompted asking whether to create a branch or not
 	// expected usage format
 	//   bit (checkout|switch|co) [-b] branch-name
-	if args[len(args)-1] == "--version" {
+	if args[len(args)-1] == "--version" || args[len(args)-1] == "version" {
 		fmt.Println("bit version " + version)
+		return false
 	}
 	if isBranchChangeCommand(sub) {
 		branchName := ""

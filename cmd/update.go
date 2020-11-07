@@ -2,28 +2,39 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/tj/go-update"
-	"github.com/tj/go-update/stores/github"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"github.com/tj/go-update"
+	"github.com/tj/go-update/stores/github"
 )
 
 // updateCmd represents the update command
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Updates bit to the latest or specified version",
-	Long:  `bit update
+	Long: `bit update
 bit update v0.7.4 (note: v is required)`,
 	Run: func(cmd *cobra.Command, args []string) {
 		targetVersion := ""
 		if len(args) == 1 {
-			targetVersion = args[0][1:]
+			targetVersion = args[0]
+		}
+		if !strings.HasPrefix(targetVersion, "v") {
+			targetVersion = "v" + targetVersion
+		}
+		currentVersion := GetVersion()
+		if !strings.HasPrefix(currentVersion, "v") {
+			currentVersion = "v" + currentVersion
 		}
 
-		currentVersion := GetVersion()
+		log.Debug().Msg(currentVersion + " -> " + targetVersion)
 
 		// open-source edition
 		p := &update.Manager{
@@ -36,7 +47,7 @@ bit update v0.7.4 (note: v is required)`,
 		}
 
 		// fetch latest or specified release
-		release, err := getLatestOrSpecified(p, targetVersion)
+		release, err := getLatestOrSpecified(p, targetVersion[1:])
 		if err != nil {
 			fmt.Println(errors.Wrap(err, "fetching latest or specified release").Error())
 			return
@@ -44,7 +55,7 @@ bit update v0.7.4 (note: v is required)`,
 
 		// no updates
 		if release == nil || currentVersion == release.Version {
-			fmt.Println("No updates available, update to date!")
+			fmt.Println("No updates available, you're up to date!")
 			return
 		}
 
@@ -68,6 +79,17 @@ bit update v0.7.4 (note: v is required)`,
 			fmt.Println(errors.Wrap(err, "looking up executable path"))
 			return
 		}
+
+		// if path is a symlink - get resolved path
+		fi, err := os.Lstat(path)
+		if err == nil && fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+			// Bit path is a symlink
+			fmt.Println("bit is symlinked. If you used homebrew try:\nbrew upgrade bit-git")
+			// path = resolvedSymlink
+			return
+		}
+		log.Debug().Msg("bit is not symlinked")
+
 		dst := filepath.Dir(path)
 
 		// install it
@@ -76,8 +98,8 @@ bit update v0.7.4 (note: v is required)`,
 			return
 		}
 
-		fmt.Printf("Updated bit %s to %s in %s", currentVersion, release.Version, dst)
-
+		fmt.Println("Bit is supported through donations. Consider donating here: ❤ https://github.com/sponsors/chriswalz ")
+		fmt.Printf("Updated bit %s to %s in %s\n", currentVersion, release.Version, dst)
 	},
 	Args: cobra.MaximumNArgs(1),
 }
@@ -98,7 +120,6 @@ func getLatestOrSpecified(s update.Store, version string) (*update.Release, erro
 // getLatest returns the latest release, error, or nil when there is none.
 func getLatest(s update.Store) (*update.Release, error) {
 	releases, err := s.LatestReleases()
-
 	if err != nil {
 		return nil, errors.Wrap(err, "fetching releases")
 	}

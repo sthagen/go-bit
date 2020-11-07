@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 	"os/exec"
 	"strings"
+
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
 func CloudBranchExists() bool {
@@ -13,8 +14,8 @@ func CloudBranchExists() bool {
 	if err != nil {
 		log.Debug().Err(err)
 	}
-	//log.Println("msg:", string(msg))
-	//log.Println("err:", err)
+	// log.Println("msg:", string(msg))
+	// log.Println("err:", err)
 	return !strings.Contains(string(msg), "There is no tracking information for the current branch")
 }
 
@@ -51,11 +52,16 @@ func IsBehindCurrent() bool {
 }
 
 func NothingToCommit() bool {
-	msg, err := execCommand("git", "status").CombinedOutput()
+	// git diff-index HEAD --
+	msg, err := execCommand("git", "diff-index", "HEAD", "--").CombinedOutput()
 	if err != nil {
 		log.Debug().Err(err)
 	}
-	return strings.Contains(string(msg), "nothing to commit")
+	changedFiles := strings.Split(strings.TrimSpace(string(msg)), "\n")
+	if len(changedFiles) == 1 && changedFiles[0] == "" {
+		return true
+	}
+	return false
 }
 
 func IsDiverged() bool {
@@ -95,10 +101,10 @@ func refreshBranch() error {
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(string(msg)) == "Already up to date." {
+	if strings.Contains(strings.TrimSpace(string(msg)), "up to date") {
 		return nil
 	}
-	log.Debug().Msg("Branch was fast-forwarded")
+	fmt.Println("Branch was fast-forwarded by bit")
 	return nil
 }
 
@@ -107,7 +113,7 @@ func refreshOnBranch(branchName string) error {
 	if err != nil {
 		return err
 	}
-	log.Debug().Msg("Branch was fast-forwarded")
+	log.Debug().Msg("Branch was fast-forwarded by bit.")
 	return nil
 }
 
@@ -175,11 +181,7 @@ func AllGitAliases() (cc []*cobra.Command) {
 }
 
 func PrintGitVersion() {
-	msg, err := execCommand("git", "--version").CombinedOutput()
-	if err != nil {
-		log.Debug().Err(err)
-	}
-	log.Debug().Msg(string(msg))
+	RunInTerminalWithColor("git", []string{"--version"})
 }
 
 func checkoutBranch(branch string) bool {
@@ -187,7 +189,11 @@ func checkoutBranch(branch string) bool {
 	if err != nil {
 		log.Debug().Err(err)
 	}
-	return !strings.Contains(string(msg), "did not match any file")
+	if strings.Contains(string(msg), "did not match any file") {
+		return false
+	}
+	fmt.Println(string(msg))
+	return true
 }
 
 func tagCurrentBranch(version string) error {
@@ -200,5 +206,12 @@ func tagCurrentBranch(version string) error {
 
 func execCommand(name string, arg ...string) *exec.Cmd {
 	log.Debug().Msg(name + " " + strings.Join(arg, " "))
-	return exec.Command(name, arg...)
+	c := exec.Command(name, arg...)
+
+	if name == "git" {
+		// exec commands are parsed by bit without getting printed.
+		// parsing git assumes english
+		c.Env = append(c.Env, "LANG=C")
+	}
+	return c
 }

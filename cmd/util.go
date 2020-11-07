@@ -2,11 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/c-bata/go-prompt"
-	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
-	"github.com/thoas/go-funk"
 	"os"
 	"os/exec"
 	"regexp"
@@ -14,6 +9,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/c-bata/go-prompt"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"github.com/thoas/go-funk"
 )
 
 func RunInTerminalWithColor(cmdName string, args []string) error {
@@ -63,7 +64,7 @@ func AskMultiLine(q string) string {
 	return text
 }
 
-func BranchList() []Branch {
+func BranchList() []*Branch {
 	rawBranchData, err := branchListRaw()
 	if err != nil {
 		log.Debug().Err(err)
@@ -71,11 +72,11 @@ func BranchList() []Branch {
 	return toStructuredBranchList(rawBranchData)
 }
 
-func toStructuredBranchList(rawBranchData string) []Branch {
-
+func toStructuredBranchList(rawBranchData string) []*Branch {
 	list := strings.Split(strings.TrimSpace(rawBranchData), "\n")
 
-	var branches []Branch
+	m := map[string]*Branch{}
+	var branches []*Branch
 	for _, line := range list {
 		// first character of each should start with ' which all commits have based on expected raw formatting
 		if !strings.HasPrefix(line, `'`) {
@@ -83,18 +84,27 @@ func toStructuredBranchList(rawBranchData string) []Branch {
 		}
 
 		cols := strings.Split(line[1:], "; ")
-		b := Branch{
+		b := &Branch{
 			Author:       cols[1],
-			Name:         cols[3],
+			FullName:     cols[3],
 			RelativeDate: cols[4],
 			AbsoluteDate: cols[0],
 		}
-		if b.Name == "origin/master" || b.Name == "origin/HEAD" {
+		if b.FullName == "origin/master" || b.FullName == "origin/HEAD" {
 			continue
 		}
+		if !strings.HasPrefix(b.FullName, "origin/") {
+			m[b.FullName] = b
+		}
+
 		branches = append(branches, b)
 	}
-	return branches
+	return funk.Filter(branches, func(b *Branch) bool {
+		if strings.HasPrefix(b.FullName, "origin/") && m[b.FullName[7:]] != nil {
+			return false
+		}
+		return true
+	}).([]*Branch)
 }
 
 func GenBumpedSemVersion() string {
@@ -120,7 +130,7 @@ func BranchListSuggestions() []prompt.Suggest {
 	var suggestions []prompt.Suggest
 	for _, branch := range branches {
 		suggestions = append(suggestions, prompt.Suggest{
-			Text:        branch.Name,
+			Text:        branch.FullName,
 			Description: fmt.Sprintf("%s  %s  %s", branch.Author, branch.RelativeDate, branch.AbsoluteDate),
 		})
 	}
@@ -177,12 +187,16 @@ func CobraCommandToSuggestions(cmds []*cobra.Command) []prompt.Suggest {
 			Description: branch.Short,
 		})
 	}
+	suggestions = append(suggestions, prompt.Suggest{
+		Text:        "--version",
+		Description: "Print current version of bit",
+	})
 	return suggestions
 }
 
 type Branch struct {
 	Author       string
-	Name         string
+	FullName     string
 	RelativeDate string
 	AbsoluteDate string
 }
@@ -192,19 +206,59 @@ type FileChange struct {
 	Status string
 }
 
+type PromptTheme struct {
+	PrefixTextColor             prompt.Color
+	SelectedSuggestionBGColor   prompt.Color
+	SuggestionBGColor           prompt.Color
+	SuggestionTextColor         prompt.Color
+	SelectedSuggestionTextColor prompt.Color
+	DescriptionBGColor          prompt.Color
+	DescriptionTextColor        prompt.Color
+}
+
+var DefaultTheme = PromptTheme{
+	PrefixTextColor:             prompt.Yellow, // fine
+	SelectedSuggestionBGColor:   prompt.Yellow,
+	SuggestionBGColor:           prompt.Yellow,
+	SuggestionTextColor:         prompt.DarkGray,
+	SelectedSuggestionTextColor: prompt.Blue,
+	DescriptionBGColor:          prompt.Black,
+	DescriptionTextColor:        prompt.White,
+}
+
+var InvertedTheme = PromptTheme{
+	PrefixTextColor:             prompt.Blue,
+	SelectedSuggestionBGColor:   prompt.LightGray,
+	SelectedSuggestionTextColor: prompt.White,
+	SuggestionBGColor:           prompt.Blue,
+	SuggestionTextColor:         prompt.White,
+	DescriptionBGColor:          prompt.LightGray,
+	DescriptionTextColor:        prompt.Black,
+}
+
+var MonochromeTheme = PromptTheme{}
+
 func SuggestionPrompt(prefix string, completer func(d prompt.Document) []prompt.Suggest) string {
+	theme := DefaultTheme
+	themeName := os.Getenv("BIT_THEME")
+	if strings.EqualFold(themeName, "inverted") {
+		theme = InvertedTheme
+	}
+	if strings.EqualFold(themeName, "monochrome") {
+		theme = MonochromeTheme
+	}
 	result := prompt.Input(prefix, completer,
 		prompt.OptionTitle(""),
 		prompt.OptionHistory([]string{""}),
-		prompt.OptionPrefixTextColor(prompt.Yellow), // fine
-		//prompt.OptionPreviewSuggestionBGColor(prompt.Yellow),
-		//prompt.OptionPreviewSuggestionTextColor(prompt.Yellow),
-		prompt.OptionSelectedSuggestionBGColor(prompt.Yellow),
-		prompt.OptionSuggestionBGColor(prompt.Yellow),
-		prompt.OptionSuggestionTextColor(prompt.DarkGray),
-		prompt.OptionSelectedSuggestionTextColor(prompt.Blue),
-		prompt.OptionDescriptionBGColor(prompt.Black),
-		prompt.OptionDescriptionTextColor(prompt.White),
+		prompt.OptionPrefixTextColor(theme.PrefixTextColor), // fine
+		prompt.OptionSelectedSuggestionBGColor(theme.SelectedSuggestionBGColor),
+		prompt.OptionSuggestionBGColor(theme.SuggestionBGColor),
+		prompt.OptionSuggestionTextColor(theme.SuggestionTextColor),
+		prompt.OptionSelectedSuggestionTextColor(theme.SelectedSuggestionTextColor),
+		prompt.OptionDescriptionBGColor(theme.DescriptionBGColor),
+		prompt.OptionDescriptionTextColor(theme.DescriptionTextColor),
+		// prompt.OptionPreviewSuggestionBGColor(prompt.Yellow),
+		// prompt.OptionPreviewSuggestionTextColor(prompt.Yellow),
 		prompt.OptionShowCompletionAtStart(),
 		prompt.OptionCompletionOnDown(),
 		prompt.OptionSwitchKeyBindMode(prompt.EmacsKeyBind),
@@ -301,12 +355,12 @@ func FlagSuggestionsForCommand(gitSubCmd string, flagtype string) []prompt.Sugge
 	str = flagMap[gitSubCmd]
 	if str == "" {
 		return []prompt.Suggest{}
-		//str = parseManPage(gitSubCmd)
+		// str = parseManPage(gitSubCmd)
 	}
 
 	list := strings.Split(str, ".\n\n")
 
-	//list := strings.Split(strings.Split(op[1], "CONFIGURATION")[0], "\n\n")
+	// list := strings.Split(strings.Split(op[1], "CONFIGURATION")[0], "\n\n")
 	var suggestions []prompt.Suggest
 	for i := 0; i < len(list)-1; i++ {
 		line := list[i]
@@ -399,9 +453,9 @@ func parseManPage(subCmd string) string {
 	splitA := strings.Split(string(msg), "\n\nOPTIONS")
 	splitB := regexp.MustCompile(`\.\n\n[A-Z]+`).Split(splitA[1], 2)
 	rawFlagSection := splitB[0]
-	//removeTabs := strings.ReplaceAll(rawFlagSection, "\t", "%%%")
-	//removeTabs := strings.ReplaceAll(rawFlagSection, "\n\t", "")
-	//removeTabs = strings.ReplaceAll(removeTabs, "%%%", "\n\n\t")
+	// removeTabs := strings.ReplaceAll(rawFlagSection, "\t", "%%%")
+	// removeTabs := strings.ReplaceAll(rawFlagSection, "\n\t", "")
+	// removeTabs = strings.ReplaceAll(removeTabs, "%%%", "\n\n\t")
 	return rawFlagSection
 }
 
@@ -496,14 +550,14 @@ func parseCommandLine(command string) ([]string, error) {
 }
 
 func memoize(suggestions []prompt.Suggest) func() []prompt.Suggest {
-	return func () []prompt.Suggest {
+	return func() []prompt.Suggest {
 		return suggestions
 	}
 }
 
 func lazyLoad(suggestionFunc func() []prompt.Suggest) func() []prompt.Suggest {
 	var suggestions []prompt.Suggest
-	return func () []prompt.Suggest {
+	return func() []prompt.Suggest {
 		if suggestions == nil {
 			suggestions = suggestionFunc()
 		}
@@ -519,7 +573,7 @@ func asyncLoad(suggestionFunc func() []prompt.Suggest) func() []prompt.Suggest {
 		defer wg.Done()
 		suggestions = suggestionFunc()
 	}()
-	return func () []prompt.Suggest {
+	return func() []prompt.Suggest {
 		wg.Wait()
 		return suggestions
 	}

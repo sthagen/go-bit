@@ -124,3 +124,14 @@ delete tag local and on origin
 bit save -e 
 
 combine bit & bitcomplete into one binary?
+
+basic usage tracking
+
+add bit --version suggestion (add global flag suggestions)
+bit update not behaving with homebrew 
+
+brew Symlink
+already exists 
+usr/local/bin/bit
+symlink
+realpath /usr/local/Cellar/bit-git/0.9.2
