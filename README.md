@@ -89,6 +89,11 @@ go get github.com/chriswalz/bit@latest;
 bit
 ```
 
+#### using `Chocolatey` (For Windows Users) 
+```shell script
+choco install bit-git
+```
+
 #### using `zinit` 
 ```shell script
 zinit ice lucit wait"0" as"program" from"gh-r" pick"bit"
@@ -235,6 +240,7 @@ v0.9
 - [X] enhancement: improve bit sync behavior including `bit sync <upstream> <branch>`
 - [X] enhancement: bit sync provides a rebase option for diverged branches`
 - [X] fix: enable compatibility with non-english languages 
+- [X] enhancement: `bit merge` suggestions
 
 v0.8
 - [X] feature: checkout Pull Requests from github (requires `gh pr list` to work)
