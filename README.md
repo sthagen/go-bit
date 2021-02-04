@@ -80,6 +80,14 @@ bit
 
 Not working? Try `brew doctor`
 
+### using `MacPorts` (For MacOS users)
+
+```shell script
+sudo port selfupdate
+sudo port install bit
+```
+
+
 #### using `go` (For Windows Users) 
 ```shell script
 go env -w GO111MODULE=on
