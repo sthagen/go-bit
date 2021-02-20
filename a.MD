@@ -139,3 +139,31 @@ realpath /usr/local/Cellar/bit-git/0.9.2
 
 show recently edited files when checking out a branch
 git log --name-status -10 path/to/dir
+
+Getting tab completions from zsh
+git st$'\t\t' | zsh -i
+
+https://brbsix.github.io/2015/11/29/accessing-tab-completion-programmatically-in-bash/
+
+use macrorecorder?
+
+
+-[X] display descriptions for all available suggestions 
+-[X] show common commands first 
+-[X] when "-" display single dash flags 
+-[X] flag filtering not working (e.g. bit push --all doesn't show "--all" suggestion)
+-[X] "bit checkout -2 " doesn't display branches
+-[X] bit co should suggest "commit" (currently displays nothing)
+-[X] bit commit should suggest "commit" (currently displays nothing)
+-[X] bit commit should suggest "commit" (currently displays nothing)
+-[X] branches need to remain ordered
+-[X] bit version && --version are missing
+-[X] branches need to have descriptions again
+-[X] reenable bit pr & have correct descriptions
+-[] maps need to be ordered?
+-[] "co" suggestion from generation tree needs to be disabled manually
+-[] some descriptions are getting cut off // FIXME
+
+-[X] "bit checkout -2 " is showing double dashes for branches
+-[X] verify tab completions work
+-[] use schlex 

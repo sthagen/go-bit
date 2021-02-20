@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/chriswalz/complete/v3"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -108,12 +110,17 @@ func toStructuredBranchList(rawBranchData string) []*Branch {
 }
 
 func GenBumpedSemVersion() string {
-	msg, err := exec.Command("/bin/sh", "-c", `git describe --tags --abbrev=0 | awk -F. '{$NF+=1; OFS="."; print $0}'`).CombinedOutput()
+	msg, err := exec.Command("/bin/sh", "-c", `git for-each-ref --format="%(refname:short)" --sort=-authordate --count=1 refs/tags`).CombinedOutput()
 	if err != nil {
 		log.Debug().Err(err).Send()
 	}
 	out := string(msg)
-	return strings.TrimSpace(out)
+	out = strings.TrimSpace(out)
+	i := strings.LastIndex(out, ".")
+	minor, err := strconv.Atoi(out[i+1:])
+	minor++
+	out = out[:i] + "." + strconv.Itoa(minor)
+	return out
 }
 
 func AddCommandToShellHistory(cmd string, args []string) {
@@ -125,29 +132,29 @@ func AddCommandToShellHistory(cmd string, args []string) {
 	log.Debug().Msg(string(msg))
 }
 
-func BranchListSuggestions() []prompt.Suggest {
+func BranchListSuggestions() []complete.Suggestion {
 	branches := BranchList()
-	var suggestions []prompt.Suggest
+	var suggestions []complete.Suggestion
 	for _, branch := range branches {
-		suggestions = append(suggestions, prompt.Suggest{
-			Text:        branch.FullName,
-			Description: fmt.Sprintf("%s  %s  %s", branch.Author, branch.RelativeDate, branch.AbsoluteDate),
+		suggestions = append(suggestions, complete.Suggestion{
+			Name: branch.FullName,
+			Desc: fmt.Sprintf("%s  %s  %s", branch.Author, branch.RelativeDate, branch.AbsoluteDate),
 		})
 	}
 	return suggestions
 }
 
-func GitAddSuggestions() []prompt.Suggest {
+func GitAddSuggestions() []complete.Suggestion {
 	fileChanges := FileChangesList()
-	var suggestions []prompt.Suggest
-	suggestions = append(suggestions, prompt.Suggest{
-		Text:        "-u",
-		Description: "Add modified and deleted files and exclude untracked files.",
+	var suggestions []complete.Suggestion
+	suggestions = append(suggestions, complete.Suggestion{
+		Name: "-u",
+		Desc: "Add modified and deleted files and exclude untracked files.",
 	})
 	for _, fc := range fileChanges {
-		suggestions = append(suggestions, prompt.Suggest{
-			Text:        fc.Name,
-			Description: fc.Status + " ~~~",
+		suggestions = append(suggestions, complete.Suggestion{
+			Name: fc.Name,
+			Desc: fc.Status + " ~~~",
 		})
 	}
 	return suggestions
@@ -167,16 +174,18 @@ func GitResetSuggestions() []prompt.Suggest {
 	return suggestions
 }
 
-func GitHubPRSuggestions() []prompt.Suggest {
-	log.Debug().Msg("Github suggestions retrieving")
-	prs := ListGHPullRequests()
-	suggestions := funk.Map(prs, func(pr *PullRequest) prompt.Suggest {
-		return prompt.Suggest{
-			Text:        fmt.Sprintf("%s:%s-#%d", pr.State, pr.AuthorBranch, pr.Number),
-			Description: fmt.Sprintf("%s", pr.Title),
-		}
-	})
-	return suggestions.([]prompt.Suggest)
+func GitHubPRSuggestions(prefix string) func(prefix string) []complete.Suggestion {
+	return func(prefix string) []complete.Suggestion {
+		log.Debug().Msg("Github suggestions retrieving")
+		prs := ListGHPullRequests()
+		suggestions := funk.Map(prs, func(pr *PullRequest) complete.Suggestion {
+			return complete.Suggestion{
+				Name: fmt.Sprintf("%s:%s-#%d", pr.State, pr.AuthorBranch, pr.Number),
+				Desc: pr.Title,
+			}
+		})
+		return suggestions.([]complete.Suggestion)
+	}
 }
 
 func CobraCommandToSuggestions(cmds []*cobra.Command) []prompt.Suggest {
@@ -187,11 +196,23 @@ func CobraCommandToSuggestions(cmds []*cobra.Command) []prompt.Suggest {
 			Description: branch.Short,
 		})
 	}
-	suggestions = append(suggestions, prompt.Suggest{
-		Text:        "--version",
-		Description: "Print current version of bit",
-	})
 	return suggestions
+}
+
+func CobraCommandToName(cmds []*cobra.Command) []string {
+	var ss []string
+	for _, cmd := range cmds {
+		ss = append(ss, cmd.Use)
+	}
+	return ss
+}
+
+func CobraCommandToDesc(cmds []*cobra.Command) []string {
+	var ss []string
+	for _, cmd := range cmds {
+		ss = append(ss, cmd.Short)
+	}
+	return ss
 }
 
 type Branch struct {
@@ -315,10 +336,10 @@ func AllBitSubCommands(rootCmd *cobra.Command) ([]*cobra.Command, map[string]*co
 
 func AllBitAndGitSubCommands(rootCmd *cobra.Command) (cc []*cobra.Command) {
 	gitAliases := AllGitAliases()
-	gitCmds := AllGitSubCommands()
-	bitCmds, _ := AllBitSubCommands(rootCmd)
+	//gitCmds := AllGitSubCommands()
+	//bitCmds, _ := AllBitSubCommands(rootCmd)
 	commonCommands := CommonCommandsList()
-	return concatCopyPreAllocate([][]*cobra.Command{commonCommands, gitCmds, bitCmds, gitAliases})
+	return concatCopyPreAllocate([][]*cobra.Command{commonCommands, gitAliases})
 }
 
 func concatCopyPreAllocate(slices [][]*cobra.Command) []*cobra.Command {
@@ -468,7 +489,7 @@ func fileExists(filename string) bool {
 }
 
 func isBranchCompletionCommand(command string) bool {
-	return command == "checkout" || command == "switch" || command == "co" || command == "pr" || command == "merge"
+	return command == "checkout" || command == "switch" || command == "co" || command == "pr" || command == "merge" || command == "rebase"
 }
 
 func isBranchChangeCommand(command string) bool {
@@ -555,13 +576,13 @@ func memoize(suggestions []prompt.Suggest) func() []prompt.Suggest {
 	}
 }
 
-func lazyLoad(suggestionFunc func() []prompt.Suggest) func() []prompt.Suggest {
-	var suggestions []prompt.Suggest
-	return func() []prompt.Suggest {
-		if suggestions == nil {
-			suggestions = suggestionFunc()
+func lazyLoad(predictFunc func(prefix string) []complete.Suggestion) func(prefix string) []complete.Suggestion {
+	var result []complete.Suggestion
+	return func(prefix string) []complete.Suggestion {
+		if result == nil {
+			result = predictFunc(prefix)
 		}
-		return suggestions
+		return result
 	}
 }
 

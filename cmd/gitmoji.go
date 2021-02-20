@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/c-bata/go-prompt"
+	"github.com/chriswalz/complete/v3"
 	"github.com/spf13/cobra"
 	"github.com/thoas/go-funk"
 	"strings"
@@ -16,10 +16,15 @@ var gitmojiCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		emojiAndMsg := ""
 		if len(args) == 0 {
-			var suggestionMap = map[string]func() []prompt.Suggest{
-				"gitmoji": GitmojiSuggestions,
+			gitmojiSuggestions := GitmojiSuggestions()
+			suggestionTree := &complete.CompTree{
+				Sub: map[string]*complete.CompTree{
+					"gitmoji": {
+						Dynamic: toAutoCLI(gitmojiSuggestions),
+					},
+				},
 			}
-			emojiAndMsg = SuggestionPrompt("> bit gitmoji ", specificCommandCompleter("gitmoji", suggestionMap))
+			emojiAndMsg = SuggestionPrompt("> bit gitmoji ", specificCommandCompleter("gitmoji", suggestionTree))
 		} else {
 			emojiAndMsg = args[0]
 			if len(args) > 0 {
@@ -47,14 +52,14 @@ var gitmojiCmd = &cobra.Command{
 }
 
 func init() {
-	ShellCmd.AddCommand(gitmojiCmd)
+	BitCmd.AddCommand(gitmojiCmd)
 }
 
-func GitmojiSuggestions() []prompt.Suggest {
-	var suggestions []prompt.Suggest
+func GitmojiSuggestions() []complete.Suggestion {
+	var suggestions []complete.Suggestion
 	for _, gitmoji := range gitmojis {
-		suggestions = append(suggestions, prompt.Suggest{
-			Text: `"` + gitmoji.Description,
+		suggestions = append(suggestions, complete.Suggestion{
+			Name: `"` + gitmoji.Description,
 			//Text: "\"" + gitmoji.Emoji + " " + gitmoji.Description,
 			//Description: "  " + gitmoji.Emoji + "  " ,
 		})
