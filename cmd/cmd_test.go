@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/chriswalz/complete/v3"
+	"strings"
 	"testing"
 
 	"github.com/c-bata/go-prompt"
@@ -102,6 +103,21 @@ func TestAllBitAndGitSubCommands(t *testing.T) {
 	}
 }
 
+func TestGenBumpedSemVersion(t *testing.T) {
+	reality, err := GenBumpedSemVersion(`v1.0.1`)
+	assert.Equal(t, "v1.0.2", reality, "expected minor version to increment by 1")
+
+	reality, err = GenBumpedSemVersion(`1.0.1`)
+	assert.Equal(t, "1.0.2", reality, "expected minor version to increment by 1")
+
+	reality, err = GenBumpedSemVersion(`nonincrementaltag`)
+	assert.Error(t, err, "expected an error since the raw tag is invalid")
+
+	_, err = GenBumpedSemVersion("\n")
+	assert.Error(t, err, "expected an error since there was no tag")
+
+}
+
 func TestParseManPage(t *testing.T) {
 	reality := parseManPage("rebase")
 	assert.NotContains(t, reality, "GIT-REBASE(1)")
@@ -189,7 +205,7 @@ func TestCompletion(t *testing.T) {
 			},
 		}
 	for _, e := range expects {
-		reality, err := complete.CompleteLine(e.line, suggestionsTree)
+		reality, err := complete.CompleteLine(e.line, suggestionsTree, strings.HasPrefix)
 		assert.Equal(t, err, nil)
 
 		for _, p := range e.predictions {

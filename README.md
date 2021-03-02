@@ -165,7 +165,11 @@ Thanks to [Gitless](https://gitless.com/), [git-extras](https://github.com/tj/gi
 ## Changelog
 v1.0
 - [X] enhancement: significantly more autocompletions
+- [X] enhancement: use fuzzy search for branch suggestions
 - [X] refactor: completions now represented in tree data structure
+- [X] fix: bit save no longer shows debug error outside debug mode
+- [X] fix: use --is-inside-work-tree to determine whether inside a git repo
+- [X] fix: gracefully handle bad release tags for `bit release bump`
 
 v0.9
 - [X] enhancement: improve bit sync behavior including `bit sync <upstream> <branch>`
@@ -290,9 +294,14 @@ zinit ice lucit wait"0" as"program" from"gh-r" pick"bit"
 zinit light "chriswalz/bit"
 ```
 
-
-
 *Note*: On Windows only the interactive prompt completion works not classic tab completion
+
+#### using AUR (For Arch Linux Users)
+For building a stable version from source, use the [`bit` package](https://aur.archlinux.org/packages/bit)
+
+For building the latest git version from source, use the [`bit-git` package](https://aur.archlinux.org/packages/bit-git)
+
+*Note*: These Packages are community-driven and not offically published my the bit maintainer.
 
 Verify installation with:
 

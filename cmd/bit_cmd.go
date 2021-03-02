@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"github.com/chriswalz/complete/v3"
+	"github.com/google/shlex"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"os"
 	"sort"
 	"strings"
@@ -79,25 +81,46 @@ func specificCommandCompleter(subCmd string, suggestionMap *complete.CompTree) f
 	}
 }
 
+var fuzzyQuery = func(s, prefix string) bool {
+	return fuzzy.Match(prefix, s)
+}
+
 func promptCompleter(suggestionTree *complete.CompTree, text string) []prompt.Suggest {
 	text = "bit " + text
-	suggestions, err := complete.CompleteLine(text, suggestionTree)
+
+	var sugg []prompt.Suggest
+
+	queryFunc := strings.HasPrefix
+
+	split, err := shlex.Split(strings.TrimSpace(text))
 	if err != nil {
-		log.Err(err).Send()
+		log.Debug().Err(err).Send()
+		return sugg
 	}
-	// fixme use shlex
-	split := strings.Split(strings.TrimSpace(text), " ")
 	lastToken := split[len(split)-1]
+	lastCommand := lastToken
+	if !strings.HasSuffix(text, " ") && len(split) >= 2 {
+		lastCommand = split[len(split)-2]
+	}
+
+	// use fuzzy search completion when querying branch names
+	if isBranchCompletionCommand(lastCommand) {
+		queryFunc = fuzzyQuery
+	}
+
+	suggestions, err := complete.CompleteLine(text, suggestionTree, queryFunc)
+	if err != nil {
+		log.Debug().Err(err).Send()
+		return sugg
+	}
+
 	// for branches dont undo most recent sorts with alphabetical sort
-	if !isBranchCompletionCommand(lastToken) {
+	if !isBranchCompletionCommand(lastCommand) {
 		sort.Slice(suggestions, func(i, j int) bool {
 			return suggestions[i].Name < suggestions[j].Name
 		})
 	}
 
-	//firstNonFlagIndex := -1
-	//j := 0
-	var sugg []prompt.Suggest
 	for _, suggestion := range suggestions {
 		name := suggestion.Name
 		if strings.HasPrefix(lastToken, "-") && !strings.HasSuffix(text, " ") {
@@ -111,9 +134,6 @@ func promptCompleter(suggestionTree *complete.CompTree, text string) []prompt.Su
 			Description: suggestion.Desc,
 		})
 	}
-	//if firstNonFlagIndex > 0 {
-	//	sugg = append(sugg[firstNonFlagIndex:], sugg[:firstNonFlagIndex]...)
-	//}
 
 	if text == "bit " {
 		sugg = append(CobraCommandToSuggestions(CommonCommandsList()), sugg...)
